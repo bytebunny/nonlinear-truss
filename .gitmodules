@@ -1,3 +1,0 @@
-[submodule "calfem-python"]
-	path = calfem-python
-	url = https://github.com/CALFEM/calfem-python.git

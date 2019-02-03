@@ -7,8 +7,6 @@
 !*.gitignore
 !*.pdf
 !*.py
-!.gitmodules
-!calfem-python/
 
 # ...even if they are in subdirectories
 !*/

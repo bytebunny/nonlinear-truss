@@ -6,7 +6,10 @@
 !LICENSE
 !*.gitignore
 !*.pdf
-!*.py
+!*.m
 
 # ...even if they are in subdirectories
 !*/
+
+# Specifically ignore:
+doc/calfem34.pdf

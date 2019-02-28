@@ -1,4 +1,4 @@
-function [f,k] = element_routine(x, y, u, du, params, el_num)
+function [f,k,tau] = element_routine(x, y, u, du, params, el_num)
 %% ELEMENT_ROUTINE Returns element bar force and stiffness in 2D.
 % Input:
 % x - initial X coordinates of nodes.

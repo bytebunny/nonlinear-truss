@@ -1,4 +1,6 @@
-function [f,k,tau] = element_routine(x, y, u, du, params, el_num)
+function [f,k,tau, strain_new, params] = ...
+    element_routine(x, y, u, du, ...
+                    params, el_num, analysis_type)
 %% ELEMENT_ROUTINE Returns element bar force and stiffness in 2D.
 % Input:
 % x - initial X coordinates of nodes.
@@ -7,10 +9,14 @@ function [f,k,tau] = element_routine(x, y, u, du, params, el_num)
 % du - increment of element displacements.
 % params - structure with material and cross-sectional parameters.
 % el_num - element number.
+% analysis_type - string ('elastic' or 'plastic') to decide if plasticity is allowed.
+% strain_plast - element plastic strain from previous time increment.
 %
 % Output:
 % f - element force vector.
 % k - element stiffness matrix.
+% strain_new - total strain at the end of time increment.
+% params - updated input structure (Matlab sends a copy).
 
 % Update node positions:
 x_new = x + u(1:2:end) + du(1:2:end);
@@ -32,9 +38,10 @@ vol = params.areas(el_num) * l;
 vol_new = vol * (l_new / l)^(1 - 2 * params.nu); % Eq. (3.4b) in Bonet & Wood.
 J = vol_new / vol;
 
-strain = log(l_new / l);
-% Compute stress and material stiffness:
-[tau, Dtau_Deps] = material_routine(strain, params);
+strain_new = log(l_new / l);
+% Compute stress, material stiffness, and new plastic strain (if any):
+[tau, Dtau_Deps, params] = ...
+    material_routine(params, strain_new, analysis_type, el_num);
 
 Df_Du = ( area_new / l_new * Dtau_Deps / J - ...
           2 * area_new / l_new * tau / J ) * (n_new * n_new') + ...

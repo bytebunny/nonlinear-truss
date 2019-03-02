@@ -1,6 +1,6 @@
 %% NONLINEAR_TRUSS main script to solve CA1.
 % The naming convention is adopted from CALFEM manual version 3.4.
-% Page and figure numbers are made to Bonet & Wood, 2nd edition. 
+% Page and figure numbers refer to Bonet & Wood, 2nd edition. 
 % /Rostyslav Skrypnyk
 
 close all
@@ -10,10 +10,22 @@ clc
 
 addpath(genpath('~/Documents/MATLAB/calfem-3/')) % Add Calfem routines.
 
-%% Settings
+%% Pre-processing
+% Choose between hyperelastic material model and 
+% elasto-plastic model:
+analysis_type = 'plastic'; % 'elastic' or 'plastic'
+if strcmp(analysis_type, 'elastic')
+    fprintf('ELASTIC analysis was chosen.\n')
+elseif strcmp(analysis_type, 'plastic')
+    fprintf('ELASTO-PLASTIC analysis was chosen.\n')
+else
+    error('/// Wrong analysis type value.')
+end
+
 % Geometry of the structure:
+alpha = 0.25 * pi; % Truss angle from the task description.
 coord = [0     0;
-         100 100; % computed via given width and angle of the frame.
+         100/tan(alpha) 100/tan(alpha);
          200   0]; % CALFEM: Global coordinate matrix, [mm].
 dof = [1 2; % dofs of node 1.
        3 4;
@@ -42,30 +54,37 @@ bc = [1 0; % DOF, prescribed value.
 dof_free = setdiff( 1:N_dof, bc(:,1), 'stable'  ); % Free DOFs.
 
 % Material and cross-sectional parameters:
-params.areas = [1; 1]; % Cross-sectional areas of the bar elements, [mm^2].
+params.areas = [0.5; ...% Cross-sectional areas of the bar elements, [mm^2].
+                0.5];
 params.young = 210.e3; % Young's modulus, [N/mm^2] (see p.89).
 params.nu = 0.5; % Poisson's ratio.
 params.yield = 25.e3; % Yield stress, [N/mm^2].
+params.plast_mod = 1; % Plastic modulus H, [N/mm^2] (smth small compared to Young's modulus).
+params.plast_strain = zeros( size(e_dof(:,1)) ); % Plastic strain for each element.
+params.harden_param = zeros( size(e_dof(:,1)) ); % Hardening parameter (accumulated absolute plastic strain) for each element.
 
 % Tolerances:
 error_tol = 1.e-6; % Error tolerance for Newton's iteration.
 max_iter = 20; % Maximum number of Newton iterations.
 
-%% Solution
+%% Processing
 % Initialise history and output variables:
 u = zeros( numel(dof),1 ); % Global displacement vector.
 du = u; % Increment of displacement.
+% History containers:
 u_hist = zeros( length(dof_free), N_steps ); % Only node 2 can move.
 stress_hist = zeros( length(e_dof(:,1)), N_steps ); % N elements by N steps.
-vertical_force_hist = 0%zeros( 1, N_steps ); % History of DOF 4.
+strain_hist = stress_hist;
+strain_plast_hist = strain_hist;
+vertical_force_hist = 0; % History of DOF 4.
 
 for step=1:N_steps % Time stepping.
     du( bc(:,1) ) = bc(:,2)*dt; % Reason why BC are defined as velocities.
     u_el = extract(e_dof,u); % Element displacements.
-    du_el = extract(e_dof,du); % Incremental element displacements.
     
     %% Equilibrium (Newton's) iteration
     for iter=1:max_iter
+        du_el = extract(e_dof,du); % Incremental element displacements.
 % Make sparse later:
         K_system = zeros( numel(dof) ); % Global stiffness
                                                 % matrix.
@@ -73,9 +92,12 @@ for step=1:N_steps % Time stepping.
         
         %% Assemble matrices
         for i=1:size(e_dof,1) % Loop over elements:
-            [force,K,stress] = element_routine(el_x(i,:), el_y(i,:), ...
-                                               u_el(i,:), du_el(i,:), ...
-                                               params,i);
+            [force,K,...
+             stress, strain,...
+             params] = element_routine(el_x(i,:), el_y(i,:), ...
+                                       u_el(i,:), du_el(i,:), ...
+                                       params, i, ...
+                                       analysis_type);
             % Assemble global stiffness matrix and RHS vector:
             K_system(e_dof(i,2:end),e_dof(i,2:end)) = ...
                K_system(e_dof(i,2:end),e_dof(i,2:end)) + K;
@@ -84,6 +106,8 @@ for step=1:N_steps % Time stepping.
                residual_vector(e_dof(i,2:end)) + force;
             % Save history:
             stress_hist(i,step) = stress;
+            strain_hist(i,step) = strain;
+            strain_plast_hist(i,step) = params.plast_strain(i);
         end
         
         %% Solve the system of linear equations:
@@ -91,7 +115,6 @@ for step=1:N_steps % Time stepping.
                    residual_vector(dof_free);
         % Update displacement increment:
         du(dof_free) = du(dof_free) + delta_du;
-
         % Check if (internal - external) forces are zero:
         if norm(residual_vector(dof_free)) <= error_tol
             fprintf('/// Step %d converged in %d iterations.\n',...
@@ -114,23 +137,35 @@ for step=1:N_steps % Time stepping.
 end
 
 %% Post-processing
-figure() % Vertical force history
+figure(1) % Fig.3.8(b): vertical force vs deflection
 initial_length = norm([ el_x(1,2) - el_x(1,1); ... 
                         el_y(1,2) - el_y(1,1) ]);
 plot([0:dt*abs(u_y):abs(u_y)] / initial_length, ...
-     [ vertical_force_hist / params.young / params.areas(1) / 2 ],'o-') % Reverse sign to match Fig.3.8(b) in Bonet & Wood, 
+     [ vertical_force_hist / params.young / params.areas(1)/2 ],'o-') % Reverse sign to match Fig.3.8(b) in Bonet & Wood, 
 % and account for computing for 2 bars instead of 1.
 xlabel('(Y - y) / L, [-]')
 ylabel('F / (EA) , [-]')
 xlim([0 2]) % Same limits as in Fig.3.8(b) of Bonet & Wood.
 ylim([-0.15 0.2])
 grid on
-
-figure() % Constitutive behaviour
-plot(0:dt*abs(u_y):abs(u_y), ...
-     [ zeros(length(dof_free),1), stress_hist(1,:) *1e-3 ],'bo-')
 hold on
-plot(0:dt*abs(u_y):abs(u_y), ...
-     [ zeros(length(dof_free),1), stress_hist(2,:) *1e-3 ], 'rx--')
-xlabel('Displacement, [mm]')
+
+figure() % Fig.3.8(c): Kirchhoff stress vs total strain (Constitutive behaviour)
+plot([ zeros(length(dof_free),1), strain_hist(1,:) ],...%0:dt*abs(u_y):abs(u_y), ...
+     [ zeros(length(dof_free),1), stress_hist(1,:) *1e-3 ],'bo-')
+xlabel('Strain, [-]')
 ylabel('Kirchhoff stress, [kN/mm2]')
+xlim([-0.4 0.3]) % Same limits as in Fig.3.8(c).
+ylim([-30 30])
+grid on
+
+if strcmp(analysis_type, 'plastic')
+    figure() % Fig.3.8(d): plastic vs total strain
+    plot([ zeros(length(dof_free),1), strain_hist(1,:) ],...
+         [ zeros(length(dof_free),1), strain_plast_hist(1,:)],'bo-')
+    xlabel('Total strain, [-]')
+    ylabel('Plastic strain, [-]')
+    xlim([-0.4 0.3]) % Same limits as in Fig.3.8(d).
+    ylim([-0.25 0.15])
+    grid on
+end

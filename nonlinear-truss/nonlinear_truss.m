@@ -34,7 +34,10 @@ e_dof = [1 1 2 3 4;
          2 3 4 5 6]; % CALFEM: Element topology (connectivity of 
                      % elements and DOFs) matrix.
 N_dof = max(max(e_dof(:,2:end)));
-[el_x, el_y] = coordxtr(e_dof, coord, dof, 2);
+N_el = length( e_dof(:,1) ); % Number of elements.
+N_el_nodes = 2; % Number of nodes in each element.
+N_el_dof = 2; % Number of DOFs per node.
+[el_x, el_y] = coordxtr(e_dof, coord, dof, N_el_nodes);
 
 % Load and time stepping:
 u_y = -2*norm(coord(1,:)-coord(2,:)); % Displace by twice the initial
@@ -60,8 +63,8 @@ params.young = 210.e3; % Young's modulus, [N/mm^2] (see p.89).
 params.nu = 0.5; % Poisson's ratio.
 params.yield = 25.e3; % Yield stress, [N/mm^2].
 params.plast_mod = 1; % Plastic modulus H, [N/mm^2] (smth small compared to Young's modulus).
-params.plast_strain = zeros( size(e_dof(:,1)) ); % Plastic strain for each element.
-params.harden_param = zeros( size(e_dof(:,1)) ); % Hardening parameter (accumulated absolute plastic strain) for each element.
+params.plast_strain = zeros(N_el,1); % Plastic strain for each element.
+params.harden_param = zeros(N_el,1); % Hardening parameter (accumulated absolute plastic strain) for each element.
 
 % Tolerances:
 error_tol = 1.e-6; % Error tolerance for Newton's iteration.
@@ -73,7 +76,7 @@ u = zeros( numel(dof),1 ); % Global displacement vector.
 du = u; % Increment of displacement.
 % History containers:
 u_hist = zeros( length(dof_free), N_steps ); % Only node 2 can move.
-stress_hist = zeros( length(e_dof(:,1)), N_steps ); % N elements by N steps.
+stress_hist = zeros( N_el, N_steps ); % N elements by N steps.
 strain_hist = stress_hist;
 strain_plast_hist = strain_hist;
 vertical_force_hist = 0; % History of DOF 4.
@@ -84,24 +87,35 @@ for step=1:N_steps % Time stepping.
     
     %% Equilibrium (Newton's) iteration
     for iter=1:max_iter
-        du_el = extract(e_dof,du); % Incremental element displacements.
-% Make sparse later:
-        K_system = zeros( numel(dof) ); % Global stiffness
-                                                % matrix.
-        residual_vector = zeros(numel(dof),1);
+        du_el = extract(e_dof,du); % Incremental element displacements. 
+
+        % Initialize sparse matrix triplets I,J,V 
+        % for the global stiffness matrix:
+        ind = 0; 
+        I = zeros(N_el*(N_el_nodes * N_el_dof)^2,1); 
+        J = zeros(N_el*(N_el_nodes * N_el_dof)^2,1); 
+        V = zeros(N_el*(N_el_nodes * N_el_dof)^2,1);
+         
+        residual_vector = zeros(N_dof,1);
         
         %% Assemble matrices
-        for i=1:size(e_dof,1) % Loop over elements:
+        for i=1:N_el % Loop over elements:
             [force,K,...
              stress, strain,...
              params] = element_routine(el_x(i,:), el_y(i,:), ...
                                        u_el(i,:), du_el(i,:), ...
                                        params, i, ...
-                                       analysis_type);
+                                       analysis_type);           
             % Assemble global stiffness matrix and RHS vector:
-            K_system(e_dof(i,2:end),e_dof(i,2:end)) = ...
-               K_system(e_dof(i,2:end),e_dof(i,2:end)) + K;
-            
+            for ii = 1:N_el_nodes * N_el_dof 
+                for jj = 1:N_el_nodes * N_el_dof
+                    ind = ind+1; 
+                    I(ind) = e_dof(i,1+ii); % 1st column in e_dof is element number.
+                    J(ind) = e_dof(i,1+jj); 
+                    V(ind) = K(ii,jj);
+                end
+            end
+           
             residual_vector(e_dof(i,2:end)) = ...
                residual_vector(e_dof(i,2:end)) + force;
             % Save history:
@@ -109,10 +123,11 @@ for step=1:N_steps % Time stepping.
             strain_hist(i,step) = strain;
             strain_plast_hist(i,step) = params.plast_strain(i);
         end
+        K_system = sparse(I,J,V);
         
         %% Solve the system of linear equations:
-        delta_du = - K_system(dof_free,dof_free) \ ...
-                   residual_vector(dof_free);
+         delta_du = - K_system(dof_free,dof_free) \ ...
+                    residual_vector(dof_free); 
         % Update displacement increment:
         du(dof_free) = du(dof_free) + delta_du;
         % Check if (internal - external) forces are zero:

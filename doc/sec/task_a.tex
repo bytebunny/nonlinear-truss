@@ -1,0 +1,101 @@
+\section{Task A}
+\label{sec:task-a}
+
+In the first task, the plots from \cite{Bonet2008} were reproduced.
+In order to achieve that the presence of the second rod in the given
+problem needed to be accounted for.
+This was done by normalising the force by the total area of the two rods.
+At each displacement increment, the vertical force in the top node (DOF 4)
+was computed as a sum of the already acting force plus the force
+needed to move the top node by the increment of the displacement,
+i.e.
+\begin{equation}
+  F_{n+1} = F_{n} + K^{\text{global}}_{4,j} \Delta u_{j}
+\end{equation}
+
+The plots presented in figure 3.8 a-d of \cite{Bonet2008} were reproduced
+and are given in figure~\ref{fig:plots-from-book}.
+\begin{figure}[th]
+  \centering
+  % Force - deflection:
+  \begin{subfigure}[t]{\textwidth}
+    \begin{tikzpicture}
+      \begin{axis}[
+        width = 0.95\textwidth,
+        height=\axisdefaultheight,
+        tick label style={/pgf/number format/fixed},
+        try min ticks=6,
+        minor tick num=1,
+        grid=both,
+        xlabel = {\( (Y - y) / L \), [-]},
+        ylabel = {\( F / (E A) \), [-]},
+        xmin = 0, 
+        xmax = 2,
+        ymin = -0.15, 
+        ymax = 0.2,
+        legend cell align=left,
+        legend style={anchor=south east, at={(1,0)}}
+        ]
+        \addplot+ table[skip first n=1] {data/force_deflection_elastic.dat}; % + = same automatically determined styles, but in addition it uses [options]
+        \addlegendentry{elastic}
+        \addplot+ table[skip first n=1] {data/force_deflection_plastic.dat};
+        \addlegendentry{plastic}
+      \end{axis}
+    \end{tikzpicture}
+    \caption{Force - deflection}
+  \end{subfigure}
+
+  % Stress - strain:
+  \begin{subfigure}[t]{0.48\textwidth}
+    \begin{tikzpicture}[baseline,yscale=1.0, xscale=1.0]
+      \begin{axis}[
+        try min ticks=7,
+        minor tick num=1,
+        grid=both,
+        xlabel = {strain, [-]},
+        ylabel = {Kirchhoff stress, [kN/mm\textsuperscript{2}]},
+        xmin = -0.4, 
+        xmax = 0.3,
+        xtick={-0.4, -0.2, 0, 0.2},
+        ymin = -30, 
+        ymax = 30,
+        legend cell align=left,
+        legend style={anchor=south east, at={(1,0)}}
+        ]
+        \addplot+ table[skip first n=1] {data/stress_strain_elastic.dat};
+        \addlegendentry{elastic}
+        \addplot+ table[skip first n=1] {data/stress_strain_plastic.dat};
+        \addlegendentry{plastic}
+      \end{axis}
+    \end{tikzpicture}
+    \caption{Constitutive behaviour}
+  \end{subfigure}
+  % Total - plastic strain:
+  \begin{subfigure}[t]{0.48\textwidth}
+    \begin{tikzpicture}[baseline,yscale=1.0, xscale=1.0]
+      \begin{axis}[
+        % try min ticks=8,
+        minor tick num=1,
+        grid=both,
+        xlabel = {total strain, [-]},
+        ylabel = {plastic strain, [-]},
+        xmin = -0.4, 
+        xmax = 0.3,
+        ymin = -0.25, 
+        ymax = 0.15
+        ]
+        \addplot+ [mark=none] table[skip first n=1] {data/tot_pl_strain.dat};
+        \addplot+  table[skip first n=1] {data/tot_pl_strain.dat}; % Plot again using style of 2nd element in cycle list.
+      \end{axis}
+    \end{tikzpicture}  
+    \caption{Plastic - total strain}
+  \end{subfigure}
+  \caption{Plots of large deflection elasto-plastic behaviour from \cite{Bonet2008}.}
+  \label{fig:plots-from-book}
+\end{figure}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../main"
+%%% End:

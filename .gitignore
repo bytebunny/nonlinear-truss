@@ -6,6 +6,10 @@
 !LICENSE
 !*.gitignore
 !*.pdf
+!*.tex
+!*.bib
+!*.dat
+!*.png
 !*.m
 
 # ...even if they are in subdirectories

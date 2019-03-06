@@ -22,6 +22,8 @@ else
     error('/// Wrong analysis type value.')
 end
 
+save_to_file = false; % Save plot data.
+
 % Geometry of the structure:
 alpha = 0.25 * pi; % Truss angle from the task description.
 coord = [0     0;
@@ -155,32 +157,64 @@ end
 figure(1) % Fig.3.8(b): vertical force vs deflection
 initial_length = norm([ el_x(1,2) - el_x(1,1); ... 
                         el_y(1,2) - el_y(1,1) ]);
-plot([0:dt*abs(u_y):abs(u_y)] / initial_length, ...
-     [ vertical_force_hist / params.young / params.areas(1)/2 ],'o-') % Reverse sign to match Fig.3.8(b) in Bonet & Wood, 
-% and account for computing for 2 bars instead of 1.
+data_force = [ [0:dt*abs(u_y):abs(u_y)]' / initial_length,...
+                vertical_force_hist' / params.young / params.areas(1)/2 ]; % account for computing for 2 bars instead of 1.
+plot(data_force(:,1), data_force(:,2),'o-')  
 xlabel('(Y - y) / L, [-]')
 ylabel('F / (EA) , [-]')
 xlim([0 2]) % Same limits as in Fig.3.8(b) of Bonet & Wood.
 ylim([-0.15 0.2])
 grid on
-hold on
+if save_to_file % Create file for LaTeX.
+    f_name = ['../doc/data/force_deflection_', analysis_type, '.dat'];
+    f_id = fopen(f_name,'w');
+    header = '# (Y - y) / L, [-]   F / (EA), [-]';
+    
+    fprintf(f_id, '%s\n', header);
+    fprintf(f_id, '%.4f           %.4f\n', data_force');
+    fclose(f_id);
+end
+
+
 
 figure() % Fig.3.8(c): Kirchhoff stress vs total strain (Constitutive behaviour)
-plot([ zeros(length(dof_free),1), strain_hist(1,:) ],...%0:dt*abs(u_y):abs(u_y), ...
-     [ zeros(length(dof_free),1), stress_hist(1,:) *1e-3 ],'bo-')
+data_stress = [ [ zeros(length(dof_free),1), strain_hist(1,:) ]' ,...
+                [ zeros(length(dof_free),1), stress_hist(1,:) *1e-3 ]' ];
+plot(data_stress(:,1), data_stress(:,2),'bo-')
 xlabel('Strain, [-]')
 ylabel('Kirchhoff stress, [kN/mm2]')
 xlim([-0.4 0.3]) % Same limits as in Fig.3.8(c).
 ylim([-30 30])
 grid on
+if save_to_file % Create file for LaTeX.
+    f_name = ['../doc/data/stress_strain_', analysis_type, '.dat'];
+    f_id = fopen(f_name,'w');
+    header = '# strain, [-]   Kirchhoff stress, [kN/mm2]';
+    
+    fprintf(f_id, '%s\n', header);
+    fprintf(f_id, '%.4f           %.4f\n', data_stress');
+    fclose(f_id);
+end
+
+
 
 if strcmp(analysis_type, 'plastic')
     figure() % Fig.3.8(d): plastic vs total strain
-    plot([ zeros(length(dof_free),1), strain_hist(1,:) ],...
-         [ zeros(length(dof_free),1), strain_plast_hist(1,:)],'bo-')
+    data_strain = [ [ zeros(length(dof_free),1), strain_hist(1,:) ]' ,...
+                    [ zeros(length(dof_free),1), strain_plast_hist(1,:) ]' ];
+    plot(data_strain(:,1), data_strain(:,2),'bo-')
     xlabel('Total strain, [-]')
     ylabel('Plastic strain, [-]')
     xlim([-0.4 0.3]) % Same limits as in Fig.3.8(d).
     ylim([-0.25 0.15])
     grid on
+    if save_to_file % Create file for LaTeX.
+        f_name = '../doc/data/tot_pl_strain.dat';
+        f_id = fopen(f_name,'w');
+        header = '# total strain, [-]   plastic strain, [-]';
+    
+        fprintf(f_id, '%s\n', header);
+        fprintf(f_id, '%.4f           %.4f\n', data_strain');
+        fclose(f_id);
+    end
 end

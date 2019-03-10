@@ -1,5 +1,5 @@
-function [stress, mat_stiff, params] = ...
-    material_routine(params, strain, analysis_type, el)
+function [stress, mat_stiff, state] = ...
+    material_routine(params, state, strain, analysis_type)
 %% MATERIAL_ROUTINE Returns stress and material stiffness.
 % Inputs:
 % params - structure containing material parameters.
@@ -12,11 +12,11 @@ function [stress, mat_stiff, params] = ...
 % mat_stiffness - derivative of stress w.r.t. strain.
 % params - updated input structure (Matlab sends a copy).
 
-stress_trial = params.young * (strain - params.plast_strain(el));
+stress_trial = params.young * (strain - state.plast_strain);
 trial_yield_f = eval_yield_func(stress_trial, ...
                                 params.yield, ...
                                 params.plast_mod, ...
-                                params.harden_param(el));
+                                state.harden_param);
 
 if strcmp(analysis_type, 'elastic') || trial_yield_f <= 0
     stress = stress_trial;
@@ -27,8 +27,8 @@ elseif strcmp(analysis_type, 'plastic') % trial_yield_f > 0 is implied.
     incr_pl_mult = trial_yield_f / (params.young + params.plast_mod);
     Dstrain_pl = incr_pl_mult * stress_trial / ( abs(stress_trial) + 1.e-10 );
     stress = stress_trial - params.young * Dstrain_pl;
-    params.plast_strain(el) = params.plast_strain(el) + Dstrain_pl;
-    params.harden_param(el) = params.harden_param(el) + incr_pl_mult;
+    state.plast_strain = state.plast_strain + Dstrain_pl;
+    state.harden_param = state.harden_param + incr_pl_mult;
     % Algorithmic tangent modulus:
     mat_stiff = (params.young * params.plast_mod) / (params.young + params.plast_mod);
 else

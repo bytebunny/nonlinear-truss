@@ -18,12 +18,12 @@ if strcmp(task,'A')
 else
     area_factor = 1.05;
     if strcmp(task,'C')
-        angle_factor = 0.1025; % tan(alpha) = 1/3;
+        angle_factor = atan(1/3);
     end
 end
 % Choose between hyperelastic material model and 
 % elasto-plastic model:
-analysis_type = 'elastic'; % 'elastic' or 'plastic'
+analysis_type = 'plastic'; % 'elastic' or 'plastic'
 if strcmp(analysis_type, 'elastic')
     fprintf('ELASTIC analysis was chosen.\n')
 elseif strcmp(analysis_type, 'plastic')
@@ -54,7 +54,7 @@ N_el_dof = 2; % Number of DOFs per node.
 % Load and time stepping:
 u_y = -2*norm(coord(1,:)-coord(2,:)); % Displace by twice the initial
                                       % length (see fig. 3.8b on p.90).
-dt = 0.0005; % [s]. Many steps are needed when truss areas are different.
+dt = 0.001; % [s]. Many steps are needed when truss areas are different.
 total_t = 1; % [s].
 N_steps = round(total_t / dt);
 
@@ -121,7 +121,7 @@ for step=1:N_steps % Time stepping.
              state_array_new(i)] = element_routine(el_x(i,:), el_y(i,:), ...
                                            u_el(i,:), du_el(i,:), ...
                                            params, state_array(i), i, ...
-                                           analysis_type);           
+                                           analysis_type);
             % Assemble global stiffness matrix and RHS vector:
             for ii = 1:N_el_nodes * N_el_dof 
                 for jj = 1:N_el_nodes * N_el_dof

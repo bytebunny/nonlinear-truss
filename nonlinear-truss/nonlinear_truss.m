@@ -12,18 +12,18 @@ addpath(genpath('~/Documents/MATLAB/calfem-3/')) % Add Calfem routines.
 
 %% Pre-processing
 task = 'C'; % Task # (A, B or C) for setting element area and saving files.
-angle_factor = 0.25;
+alpha = 0.25 * pi; % Truss angle from the task description.
 if strcmp(task,'A')
     area_factor = 1;
 else
     area_factor = 1.05;
     if strcmp(task,'C')
-        angle_factor = atan(1/3);
+        alpha = atan(1/3);
     end
 end
 % Choose between hyperelastic material model and 
 % elasto-plastic model:
-analysis_type = 'plastic'; % 'elastic' or 'plastic'
+analysis_type = 'elastic'; % 'elastic' or 'plastic'
 if strcmp(analysis_type, 'elastic')
     fprintf('ELASTIC analysis was chosen.\n')
 elseif strcmp(analysis_type, 'plastic')
@@ -35,7 +35,6 @@ end
 save_to_file = false; % Save plot data.
 
 % Geometry of the structure:
-alpha = angle_factor * pi; % Truss angle from the task description.
 coord = [0     0;
          100 100/tan(alpha);
          200   0]; % CALFEM: Global coordinate matrix, [mm].
@@ -54,7 +53,7 @@ N_el_dof = 2; % Number of DOFs per node.
 % Load and time stepping:
 u_y = -2*norm(coord(1,:)-coord(2,:)); % Displace by twice the initial
                                       % length (see fig. 3.8b on p.90).
-dt = 0.001; % [s]. Many steps are needed when truss areas are different.
+dt = 0.0005; % [s]. Many steps are needed when truss areas are different.
 total_t = 1; % [s].
 N_steps = round(total_t / dt);
 

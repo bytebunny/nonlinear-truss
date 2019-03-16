@@ -23,7 +23,7 @@ else
 end
 % Choose between hyperelastic material model and 
 % elasto-plastic model:
-analysis_type = 'plastic'; % 'elastic' or 'plastic'
+analysis_type = 'elastic'; % 'elastic' or 'plastic'
 if strcmp(analysis_type, 'elastic')
     fprintf('ELASTIC analysis was chosen.\n')
 elseif strcmp(analysis_type, 'plastic')

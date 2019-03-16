@@ -23,7 +23,7 @@ The plots are given in figure~\ref{fig:plots-C} for the left truss.
         ymin = -0.15, 
         ymax = 0.2,
         legend cell align=left,
-        legend style={anchor=south east, at={(1,0)}}
+        legend style={anchor=south west, at={(0,0)}}
         ]
         \addplot+ table[skip first n=1] {data/force_deflection_elastic_C.dat}; % + = same automatically determined styles, but in addition it uses [options]
         \addlegendentry{elastic}
@@ -44,7 +44,7 @@ The plots are given in figure~\ref{fig:plots-C} for the left truss.
         xlabel = {strain, [-]},
         ylabel = {Kirchhoff stress, [kN/mm\textsuperscript{2}]},
         % xmin = -0.4, 
-        xmax = 0.2,
+        xmax = 0.4,
         % xtick={-0.4, -0.2, 0, 0.2},
         % ymin = -30, 
         % ymax = 30,
@@ -70,9 +70,9 @@ The plots are given in figure~\ref{fig:plots-C} for the left truss.
         xlabel = {total strain, [-]},
         ylabel = {plastic strain, [-]},
         % xmin = -0.4, 
-        xmax = 0.2,
-        ymin = -0.1, 
-        ymax = 0.1
+        % xmax = 0.2,
+        % ymin = -0.1, 
+        ymax = 0.01
         ]
         \addplot+ [mark=none] table[skip first n=1] {data/tot_pl_strain_C.dat};
         \addplot+  table[skip first n=1] {data/tot_pl_strain_C.dat}; % Plot again using style of 2nd element in cycle list.
@@ -86,6 +86,8 @@ The plots are given in figure~\ref{fig:plots-C} for the left truss.
 
 In addition, the displacement of the initially upper joint is shown in
 figure~\ref{fig:node-displ-C}.
+It is evident that for such small angle the solution is sensitive to the
+difference in cross-section area between the trusses.
 \begin{figure}[th]
   \centering
   \begin{tikzpicture}[baseline,yscale=1.0, xscale=1.0]
@@ -97,11 +99,11 @@ figure~\ref{fig:node-displ-C}.
       xlabel = {horizontal displacement, [mm]},
       ylabel = {vertical displacement, [mm]},
       legend cell align=left,
-      legend style={anchor=north east, at={(1,1)}},
+      legend style={anchor=center, at={(0.5,0.5)}},
       every axis plot/.append style={line width=0.8pt}, % 0.4 - default
-      xmin=-12,
-      xmax=30,
-      ymin=-300,
+      % xmin=-12,
+      % xmax=30,
+      % ymin=-300,
       ymax=0
       ]
       \addplot+ [mark=none] table[skip first n=1] {data/node_displ_elastic_C.dat};
@@ -117,6 +119,31 @@ figure~\ref{fig:node-displ-C}.
   \caption{Displacement of the initially upper node of the first (left) truss.}
   \label{fig:node-displ-C}
 \end{figure}
+
+Obtaining the convergence for this task was the most problematic.
+Even in the case of elastic material response, a situation depicted
+in the figure~\ref{fig:no-newton} was occurring, where the local
+minimum prevented the Newton-Raphson method from finding the
+correct solution.
+In those situations, the false position method was used instead.
+\begin{figure}[th]
+  \centering
+  \begin{tikzpicture}[baseline,yscale=1.0, xscale=1.0]
+    \begin{axis}[
+      try min ticks=7,
+      width = 0.7\textwidth,
+      minor tick num=1,
+      grid=both,
+      xlabel = {displacement, [mm]},
+      ylabel = {residual, [N]},
+      ]
+      \addplot+ table[skip first n=1] {data/residual_vs_du.dat};
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Example of situation, where Newton-Raphson method can fail.}
+  \label{fig:no-newton}
+\end{figure}
+
 
 %%% Local Variables:
 %%% mode: latex

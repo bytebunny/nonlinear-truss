@@ -23,7 +23,7 @@ else
 end
 % Choose between hyperelastic material model and 
 % elasto-plastic model:
-analysis_type = 'elastic'; % 'elastic' or 'plastic'
+analysis_type = 'plastic'; % 'elastic' or 'plastic'
 if strcmp(analysis_type, 'elastic')
     fprintf('ELASTIC analysis was chosen.\n')
 elseif strcmp(analysis_type, 'plastic')
@@ -53,7 +53,7 @@ N_el_dof = 2; % Number of DOFs per node.
 % Load and time stepping:
 u_y = -2*norm(coord(1,:)-coord(2,:)); % Displace by twice the initial
                                       % length (see fig. 3.8b on p.90).
-dt = 0.0005; % [s]. Many steps are needed when truss areas are different.
+dt = 0.001; % [s]. Many steps are needed when truss areas are different.
 total_t = 1; % [s].
 N_steps = round(total_t / dt);
 
@@ -82,8 +82,9 @@ state_array_new = state_array;
 %state.harden_param = zeros(N_el,1); % Hardening parameter (accumulated absolute plastic strain) for each element.
 
 % Tolerances:
-error_tol = 1.e-6; % Error tolerance for Newton's iteration.
-max_iter = 20; % Maximum number of Newton iterations.
+error_tol = 1.e-3; % Error tolerance for Newton's iteration.
+max_iter_Newton = 10; % Maximum number of Newton iterations.
+max_iter = 100;
 
 %% Processing
 % Initialise history and output variables:
@@ -97,61 +98,121 @@ strain_plast_hist = strain_hist;
 vertical_force_hist = 0; % History of DOF 4.
 
 for step=1:N_steps % Time stepping.
+    du = zeros( numel(dof),1 ); % Do not use results from previous time step.
     du( bc(:,1) ) = bc(:,2)*dt; % Reason why BC are defined as velocities.
     u_el = extract(e_dof,u); % Element displacements.
     
-    %% Equilibrium (Newton's) iteration
+    %% Equilibrium iteration
     for iter=1:max_iter
-        du_el = extract(e_dof,du); % Incremental element displacements. 
+        %% Newton's method
+        if iter <= max_iter_Newton
+            du_el = extract(e_dof,du); % Incremental element displacements. 
 
-        % Initialize sparse matrix triplets I,J,V 
-        % for the global stiffness matrix:
-        ind = 0; 
-        I = zeros(N_el*(N_el_nodes * N_el_dof)^2,1); 
-        J = zeros(N_el*(N_el_nodes * N_el_dof)^2,1); 
-        V = zeros(N_el*(N_el_nodes * N_el_dof)^2,1);
+            % Initialize sparse matrix triplets I,J,V 
+            % for the global stiffness matrix:
+            ind = 0; 
+            I = zeros(N_el*(N_el_nodes * N_el_dof)^2,1); 
+            J = zeros(N_el*(N_el_nodes * N_el_dof)^2,1); 
+            V = zeros(N_el*(N_el_nodes * N_el_dof)^2,1);
          
-        residual_vector = zeros(N_dof,1);
+            residual_vector = zeros(N_dof,1);
         
-        %% Assemble matrices
-        for i=1:N_el % Loop over elements:
-            [force,K,...
-             stress, strain,...
-             state_array_new(i)] = element_routine(el_x(i,:), el_y(i,:), ...
+            %% Assemble matrices
+            for i=1:N_el % Loop over elements:
+                [force,K,...
+                stress, strain,...
+                state_array_new(i)] = element_routine(el_x(i,:), el_y(i,:), ...
                                            u_el(i,:), du_el(i,:), ...
                                            params, state_array(i), i, ...
                                            analysis_type);
-            % Assemble global stiffness matrix and RHS vector:
-            for ii = 1:N_el_nodes * N_el_dof 
-                for jj = 1:N_el_nodes * N_el_dof
-                    ind = ind+1; 
-                    I(ind) = e_dof(i,1+ii); % 1st column in e_dof is element number.
-                    J(ind) = e_dof(i,1+jj); 
-                    V(ind) = K(ii,jj);
+                % Assemble global stiffness matrix and RHS vector:
+                for ii = 1:N_el_nodes * N_el_dof 
+                    for jj = 1:N_el_nodes * N_el_dof
+                        ind = ind+1; 
+                        I(ind) = e_dof(i,1+ii); % 1st column in e_dof is element number.
+                        J(ind) = e_dof(i,1+jj); 
+                        V(ind) = K(ii,jj);
+                    end
                 end
-            end
             
-            residual_vector(e_dof(i,2:end)) = ...
-               residual_vector(e_dof(i,2:end)) + force;
-            % Save history:
-            stress_hist(i,step) = stress;
-            strain_hist(i,step) = strain;
-            strain_plast_hist(i,step) = state_array_new(i).plast_strain;
-        end
-        K_system = sparse(I,J,V);
+                residual_vector(e_dof(i,2:end)) = ...
+                    residual_vector(e_dof(i,2:end)) + force;
+                % Save history:
+                stress_hist(i,step) = stress;
+                strain_hist(i,step) = strain;
+                strain_plast_hist(i,step) = state_array_new(i).plast_strain;
+            end
+            K_system = sparse(I,J,V);
 
-        %% Solve the system of linear equations:
-         delta_du = - K_system(dof_free,dof_free) \ ...
-                    residual_vector(dof_free);
-        % Update displacement increment:
-        du(dof_free) = du(dof_free) + delta_du;
+            %% Solve the system of linear equations:
+            delta_du = - K_system(dof_free,dof_free) \ ...
+                        residual_vector(dof_free);
+            % Update displacement increment:
+            du(dof_free) = du(dof_free) + delta_du;
+        else
+            %% False position method
+            if iter == max_iter_Newton+1
+                fprintf(['/// Convergence was not reached within %d Newton iterations.',...
+                         ' Switched to false position method.\n'],max_iter_Newton)
+                du_a = du; du_b = du;
+                du_a(dof_free) = -sign(delta_du) * min(abs(delta_du),50);
+                du_b(dof_free) = sign(delta_du) * min(abs(delta_du),50);
+            end
+            du_el_a = extract(e_dof,du_a);
+            du_el_b = extract(e_dof,du_b);
+            residual_vector_a = zeros(N_dof,1);
+            residual_vector_b = zeros(N_dof,1);
+            for i=1:N_el % Loop over elements:
+                [force_a,~,~,~,~] = element_routine(el_x(i,:), el_y(i,:), ...
+                                           u_el(i,:), du_el_a(i,:), ...
+                                           params, state_array(i), i, ...
+                                           analysis_type);
+                residual_vector_a(e_dof(i,2:end)) = ...
+                    residual_vector_a(e_dof(i,2:end)) + force_a;
+                
+                [force_b,~,~,~,~] = element_routine(el_x(i,:), el_y(i,:), ...
+                                           u_el(i,:), du_el_b(i,:), ...
+                                           params, state_array(i), i, ...
+                                           analysis_type);
+                residual_vector_b(e_dof(i,2:end)) = ...
+                    residual_vector_b(e_dof(i,2:end)) + force_b;
+            end
+            % If residuals have different sign:
+            if sign(residual_vector_a(dof_free)) * sign(residual_vector_b(dof_free)) < 0
+                % Find the root of a line equation:
+                du(dof_free) = du_b(dof_free) - ...
+                    residual_vector_b(dof_free) * ( du_b(dof_free)-du_a(dof_free) ) / ...
+                    ( residual_vector_b(dof_free) - residual_vector_a(dof_free) );
+                % Find residual for the new displacement increment:
+                du_el = extract(e_dof,du);
+                residual_vector_c = zeros(N_dof,1);
+                for i=1:N_el % Loop over elements:
+                    [force_c,~,~,~,~] = element_routine(el_x(i,:), el_y(i,:), ...
+                                           u_el(i,:), du_el(i,:), ...
+                                           params, state_array(i), i, ...
+                                           analysis_type);
+                    residual_vector_c(e_dof(i,2:end)) = ...
+                        residual_vector_c(e_dof(i,2:end)) + force_c;
+                end
+                residual_vector = residual_vector_c;
+                % Update bounds to hunt down the equilibrium position:
+                if sign(residual_vector_b(dof_free)) * sign(residual_vector_c(dof_free)) > 0
+                    du_b(dof_free) = du(dof_free);
+                else
+                    du_a(dof_free) = du(dof_free);
+                end
+            else % Search wider:
+                du_a(dof_free) = 1.25 * du_a(dof_free);
+                du_b(dof_free) = 1.25 * du_b(dof_free);
+            end
+        end
         % Check if (internal - external) forces are zero:
         if norm(residual_vector(dof_free)) <= error_tol
             fprintf('/// Step %d converged in %d iterations.\n',...
                     step, iter)
             break
         end
-    end % Newton's iteration.
+    end % Equilibrium iteration.
 
     %% Update variables:
     u = u + du;
